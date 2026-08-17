@@ -134,6 +134,28 @@ func TestConfigPRFeedbackEnabledByEnv(t *testing.T) {
 	}
 }
 
+func TestConfigExcludeEnvOverride(t *testing.T) {
+	t.Setenv("BCR_EXCLUDE", "generated/,TODO")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if len(cfg.Exclude) != 2 || cfg.Exclude[0] != "generated/" || cfg.Exclude[1] != "TODO" {
+		t.Errorf("expected exclude list override, got %v", cfg.Exclude)
+	}
+}
+
+func TestConfigExcludeDefaultEmpty(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if len(cfg.Exclude) != 0 {
+		t.Errorf("expected empty exclude list by default, got %v", cfg.Exclude)
+	}
+}
+
 func TestProviderKeyDerivation(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "or-key")
 	t.Setenv("OPENAI_API_KEY", "oa-key")

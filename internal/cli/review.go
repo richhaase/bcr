@@ -29,6 +29,7 @@ func newReviewCmd() *cobra.Command {
 		retriesFlag     int
 		yesFlag         bool
 		noPRFeedback    bool
+		excludeFlag     []string
 	)
 
 	cmd := &cobra.Command{
@@ -65,6 +66,7 @@ func newReviewCmd() *cobra.Command {
 			if retriesFlag > 0 {
 				cfg.Retries = retriesFlag
 			}
+			cfg.Exclude = append(cfg.Exclude, excludeFlag...)
 
 			var diffContent string
 			if prNum > 0 {
@@ -106,6 +108,7 @@ func newReviewCmd() *cobra.Command {
 				Concurrency:     cfg.Concurrency,
 				Retries:         cfg.Retries,
 				Feedback:        feedback,
+				ExcludePatterns: cfg.Exclude,
 			})
 
 			run, err := runner.Run(ctx)
@@ -133,6 +136,7 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&retriesFlag, "retries", "t", 0, "maximum retry attempts per provider call on transient failures (0 = config default)")
 	cmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "submit PR review non-interactively without prompting")
 	cmd.Flags().BoolVar(&noPRFeedback, "no-pr-feedback", false, "disable fetching PR discussion context for the synthesizer")
+	cmd.Flags().StringArrayVar(&excludeFlag, "exclude", nil, "exclude findings whose file, rule, or message matches a regex; repeatable")
 
 	return cmd
 }
@@ -270,6 +274,9 @@ func renderReport(out io.Writer, run *domain.ReviewRun) {
 		if run.Dismissed > 0 {
 			fmt.Fprintf(out, "(%d false positive / duplicate findings filtered out)\n", run.Dismissed)
 		}
+		if run.Excluded > 0 {
+			fmt.Fprintf(out, "(%d finding(s) excluded by regex patterns)\n", run.Excluded)
+		}
 		return
 	}
 
@@ -301,6 +308,13 @@ func renderReport(out io.Writer, run *domain.ReviewRun) {
 	}
 
 	if run.Dismissed > 0 {
-		fmt.Fprintf(out, "(%d false positive / duplicate findings filtered out)\n\n", run.Dismissed)
+		fmt.Fprintf(out, "(%d false positive / duplicate findings filtered out)\n", run.Dismissed)
+	}
+	if run.Excluded > 0 {
+		fmt.Fprintf(out, "(%d finding(s) excluded by regex patterns)\n", run.Excluded)
+	}
+
+	if run.Excluded > 0 || run.Dismissed > 0 {
+		fmt.Fprintln(out)
 	}
 }

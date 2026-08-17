@@ -79,6 +79,7 @@ func newConfigShowCmd() *cobra.Command {
 			fmt.Fprintf(out, "temperature: %g\n", cfg.Temperature)
 			fmt.Fprintf(out, "concurrency: %d\n", cfg.Concurrency)
 			fmt.Fprintf(out, "retries: %d\n", cfg.Retries)
+			fmt.Fprintf(out, "exclude: %s\n", strings.Join(cfg.Exclude, ", "))
 			return nil
 		},
 	}

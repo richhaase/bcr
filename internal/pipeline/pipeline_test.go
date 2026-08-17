@@ -243,6 +243,57 @@ func TestSynthesizerDropsDismissedFinding(t *testing.T) {
 	}
 }
 
+const reviewBodyExcludeFile = `{"findings":[
+  {"rule":"r","category":"c","severity":"high","file":"gen/gen.go","line":1,"message":"msg"},
+  {"rule":"r2","category":"c","severity":"medium","file":"a.go","line":2,"message":"msg2"}
+]}`
+
+type excludeCompleter struct{}
+
+func (excludeCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, error) {
+	if model == "summarizer" {
+		return summaryBody, nil
+	}
+	return reviewBodyExcludeFile, nil
+}
+
+func TestRunAppliesExcludePatterns(t *testing.T) {
+	runner := NewRunner(Config{
+		Models:          []string{"m1"},
+		SummarizerModel: "summarizer",
+		ExcludePatterns: []string{`gen/`},
+	})
+	runner.client = excludeCompleter{}
+
+	run, err := runner.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if run.Excluded != 1 {
+		t.Errorf("expected 1 excluded finding, got %d", run.Excluded)
+	}
+	if len(run.Findings) != 1 {
+		t.Errorf("expected 1 post-exclusion finding, got %d", len(run.Findings))
+	}
+}
+
+func TestRunRejectsMalformedExcludePattern(t *testing.T) {
+	runner := NewRunner(Config{
+		Models:          []string{"m1"},
+		SummarizerModel: "summarizer",
+		ExcludePatterns: []string{`[unclosed`},
+	})
+	runner.client = excludeCompleter{}
+
+	_, err := runner.Run(context.Background())
+	if err == nil {
+		t.Fatal("expected error for malformed exclude pattern")
+	}
+	if !strings.Contains(err.Error(), "invalid exclude pattern") {
+		t.Errorf("expected clear error, got %q", err)
+	}
+}
+
 func TestRunPreservesSuccessfulFindingsOnPermanentFailure(t *testing.T) {
 	runner := NewRunner(Config{
 		Models:          []string{"good", "broken", "also-good"},

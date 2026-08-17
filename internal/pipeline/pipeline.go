@@ -22,6 +22,7 @@ type Config struct {
 	Concurrency     int
 	Retries         int
 	Feedback        string
+	ExcludePatterns []string
 }
 
 type modelCompleter interface {
@@ -114,6 +115,11 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 		}
 	}
 
+	allFindings, excluded, err := domain.ExcludeFindings(allFindings, r.cfg.ExcludePatterns)
+	if err != nil {
+		return nil, fmt.Errorf("apply exclude patterns: %w", err)
+	}
+
 	groups := domain.GroupFindings(allFindings)
 
 	if len(groups) == 0 {
@@ -121,6 +127,7 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 			Diff:     r.cfg.Diff,
 			Findings: allFindings,
 			Final:    nil,
+			Excluded: excluded,
 			Models:   r.cfg.Models,
 		}, nil
 	}
@@ -174,6 +181,7 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 			Diff:     r.cfg.Diff,
 			Findings: allFindings,
 			Final:    fallbackFinal,
+			Excluded: excluded,
 			Models:   r.cfg.Models,
 		}, nil
 	}
@@ -209,6 +217,7 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 		Diff:      r.cfg.Diff,
 		Findings:  allFindings,
 		Final:     finals,
+		Excluded:  excluded,
 		Dismissed: dismissed,
 		Models:    r.cfg.Models,
 	}, nil

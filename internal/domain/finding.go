@@ -52,6 +52,7 @@ type ReviewRun struct {
 	Diff      string
 	Findings  []Finding
 	Final     []FinalFinding
+	Excluded  int
 	Dismissed int
 	Models    []string
 }

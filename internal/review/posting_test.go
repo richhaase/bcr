@@ -52,6 +52,31 @@ func TestPRBodyKeptAllFields(t *testing.T) {
 	}
 }
 
+func TestPRBodyNotesExcludedCount(t *testing.T) {
+	run := &domain.ReviewRun{
+		Models:    []string{"m-a"},
+		Excluded:  2,
+		Dismissed: 1,
+		Final: []domain.FinalFinding{
+			{
+				Keep:     true,
+				Rule:     "r",
+				Severity: "high",
+				File:     "foo.go",
+				Line:     1,
+				Message:  "m",
+			},
+		},
+	}
+	body := PRBody(run)
+	if !strings.Contains(body, "2 finding(s) excluded by regex patterns") {
+		t.Errorf("expected excluded-count note in body, got:\n%s", body)
+	}
+	if !strings.Contains(body, "1 false positive/duplicate finding(s) filtered out") {
+		t.Errorf("expected dismissed-count note in body, got:\n%s", body)
+	}
+}
+
 func TestPRBodySuggestionOmittedWhenEmpty(t *testing.T) {
 	run := &domain.ReviewRun{
 		Models: []string{"m-a"},

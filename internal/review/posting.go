@@ -31,9 +31,12 @@ func PRBody(run *domain.ReviewRun) string {
 	kept := keptFindings(run)
 
 	if len(kept) == 0 {
-		b.WriteString("## BCR Review\n\n:white_check_mark: **LGTM** — No actionable findings detected in the reviewed diff.")
+		b.WriteString("## BCR Review\n\n:white_check_mark: **LGTM** — no actionable findings detected in the reviewed diff.")
 		if run.Dismissed > 0 {
 			fmt.Fprintf(&b, "\n\n_%d false positive/duplicate finding(s) filtered out._", run.Dismissed)
+		}
+		if run.Excluded > 0 {
+			fmt.Fprintf(&b, "\n\n_%d finding(s) excluded by regex patterns._", run.Excluded)
 		}
 		b.WriteString("\n")
 		return b.String()
@@ -50,6 +53,12 @@ func PRBody(run *domain.ReviewRun) string {
 			fmt.Fprintf(&b, "- **Suggestion:** %s\n", f.Suggestion)
 		}
 		b.WriteString("\n")
+	}
+	if run.Dismissed > 0 {
+		fmt.Fprintf(&b, "\n_%d false positive/duplicate finding(s) filtered out._\n", run.Dismissed)
+	}
+	if run.Excluded > 0 {
+		fmt.Fprintf(&b, "\n_%d finding(s) excluded by regex patterns._\n", run.Excluded)
 	}
 	return b.String()
 }

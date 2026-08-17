@@ -20,6 +20,7 @@ type Config struct {
 	Concurrency     int               `yaml:"concurrency"`
 	Retries         int               `yaml:"retries"`
 	PRFeedback      bool              `yaml:"pr_feedback"`
+	Exclude         []string          `yaml:"exclude"`
 }
 
 func DefaultConfig() *Config {
@@ -93,6 +94,16 @@ func Load() (*Config, error) {
 		}
 	}
 
+	if val := os.Getenv("BCR_EXCLUDE"); val != "" {
+		var list []string
+		for _, p := range strings.Split(val, ",") {
+			if trimmed := strings.TrimSpace(p); trimmed != "" {
+				list = append(list, trimmed)
+			}
+		}
+		cfg.Exclude = append(cfg.Exclude, list...)
+	}
+
 	return cfg, nil
 }
 
@@ -138,6 +149,9 @@ concurrency: 0
 retries: 3
 
 pr_feedback: true
+
+exclude:
+  - "generated/(.*)"
 `
 
 func configDir() string {
