@@ -25,8 +25,6 @@ make clean             # Clean build artifacts
 
 ```
 .
-```
-.
 ├── cmd/bcr/          # Main entry point (thin wrapper)
 │   └── main.go         # Version injection, signal handling, calls cli.Execute()
 ├── internal/
