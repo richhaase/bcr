@@ -45,13 +45,7 @@ func Load() (*Config, error) {
 	if val := os.Getenv("BCR_BASE_URL"); val != "" {
 		cfg.BaseURL = val
 	}
-	if val := os.Getenv("BCR_API_KEY"); val != "" {
-		cfg.APIKey = val
-	} else if val := os.Getenv("OPENROUTER_API_KEY"); val != "" {
-		cfg.APIKey = val
-	} else if val := os.Getenv("OPENAI_API_KEY"); val != "" {
-		cfg.APIKey = val
-	}
+	cfg.APIKey = providerKeyFor(cfg.BaseURL)
 
 	if val := os.Getenv("BCR_MODELS"); val != "" {
 		var list []string
@@ -100,4 +94,17 @@ func configDir() string {
 		return filepath.Join(home, ".config")
 	}
 	return ""
+}
+
+func providerKeyFor(baseURL string) string {
+	switch {
+	case strings.Contains(baseURL, "openrouter"):
+		return os.Getenv("OPENROUTER_API_KEY")
+	case strings.Contains(baseURL, "openai.com"):
+		return os.Getenv("OPENAI_API_KEY")
+	case strings.Contains(baseURL, "anthropic.com"):
+		return os.Getenv("ANTHROPIC_API_KEY")
+	default:
+		return ""
+	}
 }

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -57,22 +56,6 @@ func NewClient(baseURL, apiKey string) *Client {
 			Timeout: 120 * time.Second,
 		},
 	}
-}
-
-func ResolveAPIKey() (string, string) {
-	if key := os.Getenv("BCR_API_KEY"); key != "" {
-		return key, os.Getenv("BCR_BASE_URL")
-	}
-	if key := os.Getenv("OPENROUTER_API_KEY"); key != "" {
-		return key, "https://openrouter.ai/api/v1"
-	}
-	if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-		return key, "https://api.openai.com/v1"
-	}
-	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-		return key, "https://api.anthropic.com/v1"
-	}
-	return "", ""
 }
 
 func (c *Client) Complete(ctx context.Context, model string, messages []Message, temp float64) (string, error) {
