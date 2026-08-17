@@ -162,6 +162,91 @@ func TestDeskForgetCommand(t *testing.T) {
 	}
 }
 
+func TestParsePRRef(t *testing.T) {
+	tests := map[string]struct {
+		ref    string
+		owner  string
+		repo   string
+		number string
+	}{
+		"simple":        {"richhaase/bcr#8", "richhaase", "bcr", "8"},
+		"numeric parts": {"repo1/owner2#123", "repo1", "owner2", "123"},
+		"hyphens":       {"my-org/my-repo#42", "my-org", "my-repo", "42"},
+		"underscores":   {"my_org/my_repo#7", "my_org", "my_repo", "7"},
+		"dots allowed":  {"a.b/c.d#1", "a.b", "c.d", "1"},
+		"number zeros":  {"o/r#000", "o", "r", "000"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			owner, repo, number, err := parsePRRef(tc.ref)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if owner != tc.owner || repo != tc.repo || number != tc.number {
+				t.Errorf("got (%q, %q, %q), want (%q, %q, %q)", owner, repo, number, tc.owner, tc.repo, tc.number)
+			}
+		})
+	}
+}
+
+func TestParsePRRejectsInvalid(t *testing.T) {
+	tests := map[string]string{
+		"empty":                "",
+		"no number":            "owner/repo",
+		"no hash":              "owner/repo",
+		"empty owner":          "/repo#1",
+		"empty repo":           "owner/#1",
+		"empty number":         "owner/repo#",
+		"non-numeric number":   "owner/repo#abc",
+		"number with slash":    "owner/repo#1/2",
+		"triple parts":         "a/b/c#1",
+		"path traversal owner": "../repo#1",
+		"path traversal repo":  "owner/..#1",
+		"single dot owner":     "./repo#1",
+		"single dot repo":      "owner/.#1",
+		"slash in owner":       "own/er/rep#1",
+		"backslash":            "own\\er/repo#1",
+		"space in repo":        "owner/re po#1",
+		"space in owner":       "ow ner/repo#1",
+		"at sign":              "owner@x/repo#1",
+		"colon":                "owner:repo#1",
+	}
+	for name, ref := range tests {
+		t.Run(name, func(t *testing.T) {
+			if _, _, _, err := parsePRRef(ref); err == nil {
+				t.Errorf("expected error for ref %q", ref)
+			}
+		})
+	}
+}
+
+func TestParsePRNoPathTraversal(t *testing.T) {
+	refs := []string{
+		"../repo#1",
+		"repo/../../etc#1",
+		"../.../repo#1",
+		"owner/..#1",
+		"..\\/evil#1",
+	}
+	for _, ref := range refs {
+		owner, repo, number, err := parsePRRef(ref)
+		if err == nil {
+			t.Errorf("expected error for ref %q, got (%q, %q, %q)", ref, owner, repo, number)
+		}
+	}
+}
+
+func TestSaveRejectsInvalidPRRef(t *testing.T) {
+	dir := t.TempDir()
+	st := NewStoreAt(dir)
+	if err := st.SaveRun("owner/../../etc#1", ReviewRecordV1{}); err == nil {
+		t.Error("expected error saving under path-traversal PR ref")
+	}
+	if err := st.SaveRun("owner/repo#notanumber", ReviewRecordV1{}); err == nil {
+		t.Error("expected error saving with non-numeric PR number")
+	}
+}
+
 func TestAtomicWritePreventsPartialFiles(t *testing.T) {
 	dir := t.TempDir()
 	st := NewStoreAt(dir)

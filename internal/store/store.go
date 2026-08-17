@@ -132,14 +132,51 @@ func parsePRRef(prRef string) (owner, repo, number string, err error) {
 		return "", "", "", fmt.Errorf("invalid PR ref %q: expected owner/repo#number", prRef)
 	}
 	number = prRef[idx+1:]
+	if !allDigits(number) {
+		return "", "", "", fmt.Errorf("invalid PR ref %q: number must be digits", prRef)
+	}
 	ownerRepo := prRef[:idx]
 	parts := strings.Split(ownerRepo, "/")
-	if len(parts) < 2 {
+	if len(parts) != 2 {
 		return "", "", "", fmt.Errorf("invalid PR ref %q: expected owner/repo#number", prRef)
 	}
 	owner = parts[0]
-	repo = strings.Join(parts[1:], "/")
+	repo = parts[1]
+	for _, p := range []string{owner, repo} {
+		if !validComponent(p) {
+			return "", "", "", fmt.Errorf("invalid PR ref %q: invalid owner/repo token", prRef)
+		}
+	}
 	return owner, repo, number, nil
+}
+
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func validComponent(s string) bool {
+	if s == "" || s == "." || s == ".." {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '_' || r == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func readRecord(path string) (ReviewRecordV1, error) {

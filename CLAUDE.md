@@ -30,12 +30,23 @@ make clean             # Clean build artifacts
 ├── internal/
 │   ├── cli/            # Cobra command definitions
 │   │   ├── root.go     # Root command, Execute(), slog setup
-│   │   ├── version.go  # Version command
-│   │   └── *.go        # Additional commands
+│   │   ├── review.go   # review command (single-file review)
+│   │   ├── watch.go    # watch command (polling re-review)
+│   │   ├── desk.go     # desk command (review history/forget)
+│   │   ├── config.go   # config command (init/show/port)
+│   │   └── version.go  # Version command
+│   ├── config/         # Configuration loading and porting
+│   │   └── port/         # ACR config auto-porting
 │   ├── domain/         # Core business logic (no external deps)
-│   ├── config/         # Configuration loading
-│   └── terminal/       # TTY detection helpers
-├── scripts/            # Bootstrap tooling (setup.sh)
+│   ├── store/          # Persistent review records
+│   ├── diff/           # Diff parsing
+│   ├── github/         # GitHub API client
+│   ├── pipeline/       # Review pipeline orchestration
+│   ├── prompt/         # Prompt construction
+│   ├── provider/       # LLM provider integrations
+│   ├── review/         # Review orchestration
+│   ├── terminal/       # TTY detection helpers
+│   └── watch/          # Watch/monitoring loops
 └── .github/workflows/  # CI and release automation
 ```
 
@@ -61,7 +72,7 @@ previous run's value.
 - `main()` installs `signal.NotifyContext` (SIGINT/SIGTERM) and calls
   `rootCmd.ExecuteContext(ctx)`
 - Long-running commands should read `cmd.Context()` and stop when it is
-  canceled (see `internal/cli/example.go`)
+  canceled
 
 ### Logging
 
@@ -130,22 +141,6 @@ stdlib paths. Bump it to a current patch release; do not round it down.
   (see `internal/config/config_test.go`)
 
 ## Common Tasks
-
-### Rename the CLI
-
-Use the bootstrap script, which handles all of the below (module path,
-binary name, env-var prefix, README cleanup, LICENSE):
-
-```bash
-./scripts/setup.sh -o myuser -r my-cli
-```
-
-Manual equivalent:
-1. Update `BINARY` in `Makefile`
-2. Update `Use` in `internal/cli/root.go`
-3. Update `main` and `binary` in `.goreleaser.yaml`
-4. Update module path in `go.mod` and all imports
-5. Update the `BCR_*` env-var prefix in `internal/config/config.go`
 
 ### Add a Dependency
 
