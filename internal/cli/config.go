@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/richhaase/bcr/internal/config"
+	"github.com/richhaase/bcr/internal/config/port"
 )
 
 func newConfigCmd() *cobra.Command {
@@ -20,7 +22,51 @@ func newConfigCmd() *cobra.Command {
 	cmd.AddCommand(
 		newConfigInitCmd(),
 		newConfigShowCmd(),
+		newConfigPortCmd(),
 	)
+
+	return cmd
+}
+
+func newConfigPortCmd() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "port",
+		Short: "Port an existing ACR config into a .bcr.yaml",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := port.FindACRConfig()
+			if err != nil {
+				return err
+			}
+			if path == "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "No .acr.yaml found; nothing to port\n")
+				return nil
+			}
+
+			res, err := port.Port(path)
+			if err != nil {
+				return err
+			}
+			for _, w := range res.Warnings {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s\n", w)
+			}
+
+			target := config.LocalConfigPath()
+			if err := port.Write(target, res.Config, force); err != nil {
+				if errors.Is(err, port.ErrExists) {
+					fmt.Fprintf(cmd.ErrOrStderr(), "A .bcr.yaml already exists; use --force to overwrite it\n")
+					return nil
+				}
+				return err
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Ported %s -> %s\n", path, target)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing .bcr.yaml")
 
 	return cmd
 }
