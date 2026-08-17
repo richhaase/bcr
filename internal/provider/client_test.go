@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestIsRetryable(t *testing.T) {
@@ -160,5 +162,92 @@ func TestCompleteRetriesEmptyOutput(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Errorf("expected 2 calls, got %d", calls)
+	}
+}
+
+func TestCompleteMalformedJSON(t *testing.T) {
+	c := NewClient("http://test", "key")
+	c.MaxRetries = 2
+	c.BaseDelay = 0
+	c.MaxDelay = 0
+	calls := 0
+	c.HTTPClient.Transport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader([]byte(`this is not json`))), Header: http.Header{}}, nil
+	})
+	out, _, err := c.Complete(context.Background(), "m", nil, 0)
+	if err == nil {
+		t.Fatal("expected error for malformed JSON body")
+	}
+	if !strings.Contains(err.Error(), "decode provider response") {
+		t.Errorf("expected decode error, got %v", err)
+	}
+	if out != "" {
+		t.Errorf("expected empty out, got %q", out)
+	}
+	if calls != 1 {
+		t.Errorf("expected 1 call (non-retryable), got %d", calls)
+	}
+}
+
+func TestCompleteAPIErrorObject(t *testing.T) {
+	c := NewClient("http://test", "key")
+	c.MaxRetries = 2
+	c.BaseDelay = 0
+	c.MaxDelay = 0
+	calls := 0
+	c.HTTPClient.Transport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader([]byte(`{"error":{"message":"insufficient_quota","type":"insufficient_quota","code":429},"choices":[]}`))), Header: http.Header{}}, nil
+	})
+	out, _, err := c.Complete(context.Background(), "m", nil, 0)
+	if err == nil {
+		t.Fatal("expected error for provider API error object")
+	}
+	if !strings.Contains(err.Error(), "provider api error: insufficient_quota") {
+		t.Errorf("expected provider api error message, got %v", err)
+	}
+	if out != "" {
+		t.Errorf("expected empty out, got %q", out)
+	}
+	if calls != 1 {
+		t.Errorf("expected 1 call (non-retryable), got %d", calls)
+	}
+}
+
+func TestCompleteContextCancelledMidRequest(t *testing.T) {
+	c := NewClient("http://test", "key")
+	c.MaxRetries = 3
+	c.BaseDelay = 0
+	c.MaxDelay = 0
+	calls := 0
+	started := make(chan struct{})
+	c.HTTPClient.Transport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		close(started)
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		_, _, err := c.Complete(ctx, "m", nil, 0)
+		result <- err
+	}()
+
+	<-started
+	cancel()
+
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Complete did not return after context cancellation")
+	}
+	if calls != 1 {
+		t.Errorf("expected 1 call (no retry on cancel), got %d", calls)
 	}
 }

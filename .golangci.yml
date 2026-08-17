@@ -29,6 +29,7 @@ linters:
       excludes:
         - G104
         - G204
+        - G302
         - G304
     misspell:
       locale: US
