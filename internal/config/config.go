@@ -72,12 +72,11 @@ func Load() (*Config, error) {
 }
 
 func findConfigFile() string {
-	if _, err := os.Stat(".bcr.yaml"); err == nil {
-		return ".bcr.yaml"
+	if _, err := os.Stat(LocalConfigPath()); err == nil {
+		return LocalConfigPath()
 	}
 
-	if dir := configDir(); dir != "" {
-		path := filepath.Join(dir, "bcr", "config.yaml")
+	if path := GlobalConfigPath(); path != "" {
 		if _, err := os.Stat(path); err == nil {
 			return path
 		}
@@ -85,6 +84,30 @@ func findConfigFile() string {
 
 	return ""
 }
+
+func LocalConfigPath() string {
+	return ".bcr.yaml"
+}
+
+func GlobalConfigPath() string {
+	if dir := configDir(); dir != "" {
+		return filepath.Join(dir, "bcr", "config.yaml")
+	}
+	return ""
+}
+
+const DefaultTemplate = `base_url: "https://openrouter.ai/api/v1"
+
+models:
+  - "deepseek/deepseek-chat"
+  - "qwen/qwen-2.5-coder-32b-instruct"
+
+summarizer_model: "anthropic/claude-3.7-sonnet"
+
+base: "main"
+
+temperature: 0.2
+`
 
 func configDir() string {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
