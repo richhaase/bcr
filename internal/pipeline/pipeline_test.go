@@ -3,10 +3,12 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/richhaase/bcr/internal/domain"
 	"github.com/richhaase/bcr/internal/provider"
 )
 
@@ -126,6 +128,119 @@ func (f *failCompleter) Complete(_ context.Context, model string, _ []provider.M
 		return "", f.failErr
 	}
 	return reviewBody, nil
+}
+
+const summaryDismissedBody = `{"findings":[
+  {"rule":"r","category":"c","severity":"high","file":"a.go","line":1,"message":"msg","keep":true},
+  {"rule":"old","category":"c","severity":"medium","file":"b.go","line":3,"message":"already addressed","keep":false,"dismiss_reason":"already addressed in PR discussion"}
+]}`
+
+type capturingCompleter struct {
+	mu                sync.Mutex
+	summarizerMessage []provider.Message
+}
+
+func (c *capturingCompleter) Complete(_ context.Context, model string, messages []provider.Message, _ float64) (string, error) {
+	if model == "summarizer" {
+		c.mu.Lock()
+		c.summarizerMessage = messages
+		c.mu.Unlock()
+		return summaryBody, nil
+	}
+	return reviewBody, nil
+}
+
+func TestPipelineInjectsFeedback(t *testing.T) {
+	var f capturingCompleter
+	runner := NewRunner(Config{
+		Models:          []string{"m1"},
+		SummarizerModel: "summarizer",
+		Feedback:        "The timeout is intentional per discussion.",
+	})
+	runner.client = &f
+
+	run, err := runner.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if len(run.Final) != 1 {
+		t.Fatalf("expected 1 final finding, got %d", len(run.Final))
+	}
+
+	f.mu.Lock()
+	messages := append([]provider.Message(nil), f.summarizerMessage...)
+	f.mu.Unlock()
+
+	var userMsg string
+	for _, m := range messages {
+		if m.Role == "user" {
+			userMsg = m.Content
+		}
+	}
+	if !strings.Contains(userMsg, "Prior PR Discussion & Context:") {
+		t.Errorf("expected feedback section in summarizer prompt, got %q", userMsg)
+	}
+	if !strings.Contains(userMsg, "The timeout is intentional per discussion.") {
+		t.Errorf("expected feedback body in summarizer prompt, got %q", userMsg)
+	}
+}
+
+func TestPipelineNoFeedbackWhenEmpty(t *testing.T) {
+	var f capturingCompleter
+	runner := NewRunner(Config{
+		Models:          []string{"m1"},
+		SummarizerModel: "summarizer",
+	})
+	runner.client = &f
+
+	if _, err := runner.Run(context.Background()); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	f.mu.Lock()
+	messages := append([]provider.Message(nil), f.summarizerMessage...)
+	f.mu.Unlock()
+
+	for _, m := range messages {
+		if m.Role == "user" && strings.Contains(m.Content, "Prior PR Discussion & Context:") {
+			t.Errorf("did not expect feedback section without feedback config")
+		}
+	}
+}
+
+type dismissCompleter struct{}
+
+func (dismissCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, error) {
+	if model == "summarizer" {
+		return summaryDismissedBody, nil
+	}
+	return reviewBody, nil
+}
+
+func TestSynthesizerDropsDismissedFinding(t *testing.T) {
+	runner := NewRunner(Config{
+		Models:          []string{"m1"},
+		SummarizerModel: "summarizer",
+	})
+	runner.client = dismissCompleter{}
+
+	run, err := runner.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if run.Dismissed != 1 {
+		t.Errorf("expected 1 dismissed finding, got %d", run.Dismissed)
+	}
+
+	var kept []domain.FinalFinding
+	for _, f := range run.Final {
+		if f.Keep {
+			kept = append(kept, f)
+		}
+	}
+	if len(kept) != 1 {
+		t.Errorf("expected 1 kept final finding, got %d", len(kept))
+	}
 }
 
 func TestRunPreservesSuccessfulFindingsOnPermanentFailure(t *testing.T) {

@@ -19,6 +19,7 @@ type Config struct {
 	Temperature     float64           `yaml:"temperature"`
 	Concurrency     int               `yaml:"concurrency"`
 	Retries         int               `yaml:"retries"`
+	PRFeedback      bool              `yaml:"pr_feedback"`
 }
 
 func DefaultConfig() *Config {
@@ -34,6 +35,7 @@ func DefaultConfig() *Config {
 		Temperature:     0.2,
 		Concurrency:     0,
 		Retries:         3,
+		PRFeedback:      true,
 	}
 }
 
@@ -85,6 +87,12 @@ func Load() (*Config, error) {
 		}
 	}
 
+	if val := os.Getenv("BCR_PR_FEEDBACK"); val != "" {
+		if b, err := strconv.ParseBool(val); err == nil {
+			cfg.PRFeedback = b
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -128,6 +136,8 @@ temperature: 0.2
 concurrency: 0
 
 retries: 3
+
+pr_feedback: true
 `
 
 func configDir() string {

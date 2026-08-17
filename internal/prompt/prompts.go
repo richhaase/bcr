@@ -34,6 +34,7 @@ Your task is to:
 3. Mark valid, actionable findings with "keep": true.
 4. Mark invalid, non-defect, or stylistic findings with "keep": false and explain in "dismiss_reason".
 5. Preserve findings supported by multiple reviewers unless they are demonstrably incorrect.
+6. If PR discussion context is provided, dismiss any finding that was already explicitly discussed, acknowledged as intentional, or addressed in prior conversation with "keep": false and "dismiss_reason": "already addressed in PR discussion".
 
 Output JSON only in this exact format:
 {

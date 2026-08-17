@@ -28,6 +28,7 @@ func newReviewCmd() *cobra.Command {
 		concurrencyFlag int
 		retriesFlag     int
 		yesFlag         bool
+		noPRFeedback    bool
 	)
 
 	cmd := &cobra.Command{
@@ -80,6 +81,20 @@ func newReviewCmd() *cobra.Command {
 				return nil
 			}
 
+			var feedback string
+			if prNum > 0 && cfg.PRFeedback && !noPRFeedback {
+				repoStr, repoErr := github.RepoName(ctx)
+				if repoErr != nil {
+					slog.Debug("could not resolve repo for PR discussion; continuing without it", "err", repoErr)
+				} else {
+					owner, repo := splitOwnerRepo(repoStr)
+					feedback, repoErr = github.FetchDiscussion(ctx, owner, repo, prNum)
+					if repoErr != nil {
+						slog.Debug("could not fetch PR discussion; continuing without it", "err", repoErr)
+					}
+				}
+			}
+
 			runner := pipeline.NewRunner(pipeline.Config{
 				Models:          cfg.Models,
 				SummarizerModel: cfg.SummarizerModel,
@@ -90,6 +105,7 @@ func newReviewCmd() *cobra.Command {
 				Temperature:     cfg.Temperature,
 				Concurrency:     cfg.Concurrency,
 				Retries:         cfg.Retries,
+				Feedback:        feedback,
 			})
 
 			run, err := runner.Run(ctx)
@@ -116,6 +132,7 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&concurrencyFlag, "concurrency", "c", 0, "maximum number of reviewer models to run in parallel (0 = unbounded)")
 	cmd.Flags().IntVarP(&retriesFlag, "retries", "t", 0, "maximum retry attempts per provider call on transient failures (0 = config default)")
 	cmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "submit PR review non-interactively without prompting")
+	cmd.Flags().BoolVar(&noPRFeedback, "no-pr-feedback", false, "disable fetching PR discussion context for the synthesizer")
 
 	return cmd
 }

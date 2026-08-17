@@ -21,6 +21,7 @@ type Config struct {
 	Temperature     float64
 	Concurrency     int
 	Retries         int
+	Feedback        string
 }
 
 type modelCompleter interface {
@@ -134,16 +135,21 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 		summarizerModel = r.cfg.Models[0]
 	}
 
+	sumContent := fmt.Sprintf(
+		"Here is the git diff:\n\n```diff\n%s\n```\n\nHere are the findings gathered from parallel reviewers:\n\n```json\n%s\n```",
+		r.cfg.Diff,
+		string(groupsJSON),
+	)
+	if r.cfg.Feedback != "" {
+		sumContent += fmt.Sprintf(
+			"\n\nPrior PR Discussion & Context:\n\"\"\"\n%s\n\"\"\"",
+			r.cfg.Feedback,
+		)
+	}
+
 	sumMessages := []provider.Message{
 		{Role: "system", Content: prompt.SummarizerSystemPrompt},
-		{
-			Role: "user",
-			Content: fmt.Sprintf(
-				"Here is the git diff:\n\n```diff\n%s\n```\n\nHere are the findings gathered from parallel reviewers:\n\n```json\n%s\n```",
-				r.cfg.Diff,
-				string(groupsJSON),
-			),
-		},
+		{Role: "user", Content: sumContent},
 	}
 
 	sumResp, err := r.client.Complete(ctx, summarizerModel, sumMessages, 0.1)

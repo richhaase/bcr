@@ -100,6 +100,40 @@ func TestRetriesIgnoredWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestConfigPRFeedbackDisabledByEnv(t *testing.T) {
+	t.Setenv("BCR_PR_FEEDBACK", "false")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.PRFeedback {
+		t.Errorf("expected PRFeedback disabled by env, got true")
+	}
+}
+
+func TestConfigPRFeedbackDefaultEnabled(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if !cfg.PRFeedback {
+		t.Errorf("expected PRFeedback enabled by default, got false")
+	}
+}
+
+func TestConfigPRFeedbackEnabledByEnv(t *testing.T) {
+	t.Setenv("BCR_PR_FEEDBACK", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if !cfg.PRFeedback {
+		t.Errorf("expected PRFeedback enabled via env, got false")
+	}
+}
+
 func TestProviderKeyDerivation(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "or-key")
 	t.Setenv("OPENAI_API_KEY", "oa-key")
