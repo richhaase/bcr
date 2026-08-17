@@ -18,6 +18,7 @@ type Config struct {
 	Base            string            `yaml:"base"`
 	Temperature     float64           `yaml:"temperature"`
 	Concurrency     int               `yaml:"concurrency"`
+	Retries         int               `yaml:"retries"`
 }
 
 func DefaultConfig() *Config {
@@ -32,6 +33,7 @@ func DefaultConfig() *Config {
 		Base:            "main",
 		Temperature:     0.2,
 		Concurrency:     0,
+		Retries:         3,
 	}
 }
 
@@ -77,6 +79,12 @@ func Load() (*Config, error) {
 		}
 	}
 
+	if val := os.Getenv("BCR_RETRIES"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil {
+			cfg.Retries = n
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -118,6 +126,8 @@ base: "main"
 temperature: 0.2
 
 concurrency: 0
+
+retries: 3
 `
 
 func configDir() string {

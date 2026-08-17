@@ -26,6 +26,7 @@ func newReviewCmd() *cobra.Command {
 		modelsFlag      string
 		summarizerModel string
 		concurrencyFlag int
+		retriesFlag     int
 		yesFlag         bool
 	)
 
@@ -60,6 +61,9 @@ func newReviewCmd() *cobra.Command {
 			if concurrencyFlag > 0 {
 				cfg.Concurrency = concurrencyFlag
 			}
+			if retriesFlag > 0 {
+				cfg.Retries = retriesFlag
+			}
 
 			var diffContent string
 			if prNum > 0 {
@@ -85,6 +89,7 @@ func newReviewCmd() *cobra.Command {
 				Extra:           cfg.Extra,
 				Temperature:     cfg.Temperature,
 				Concurrency:     cfg.Concurrency,
+				Retries:         cfg.Retries,
 			})
 
 			run, err := runner.Run(ctx)
@@ -109,6 +114,7 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&modelsFlag, "reviewers", "r", "", "comma-separated list of reviewer models")
 	cmd.Flags().StringVarP(&summarizerModel, "summarizer", "s", "", "summarizer model")
 	cmd.Flags().IntVarP(&concurrencyFlag, "concurrency", "c", 0, "maximum number of reviewer models to run in parallel (0 = unbounded)")
+	cmd.Flags().IntVarP(&retriesFlag, "retries", "t", 0, "maximum retry attempts per provider call on transient failures (0 = config default)")
 	cmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "submit PR review non-interactively without prompting")
 
 	return cmd

@@ -66,6 +66,40 @@ func TestConcurrencyIgnoredWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestRetriesDefaultThree(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Retries != 3 {
+		t.Errorf("expected default retries 3, got %d", cfg.Retries)
+	}
+}
+
+func TestRetriesEnvOverride(t *testing.T) {
+	t.Setenv("BCR_RETRIES", "5")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Retries != 5 {
+		t.Errorf("expected retries 5, got %d", cfg.Retries)
+	}
+}
+
+func TestRetriesIgnoredWhenEmpty(t *testing.T) {
+	t.Setenv("BCR_RETRIES", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Retries != 3 {
+		t.Errorf("expected retries 3, got %d", cfg.Retries)
+	}
+}
+
 func TestProviderKeyDerivation(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "or-key")
 	t.Setenv("OPENAI_API_KEY", "oa-key")

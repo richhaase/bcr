@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -101,5 +102,49 @@ func TestRunUnboundedConcurrency(t *testing.T) {
 	}
 	if len(run.Findings) != 3 {
 		t.Errorf("expected 3 findings, got %d", len(run.Findings))
+	}
+}
+
+type failCompleter struct {
+	mu      sync.Mutex
+	calls   map[string]int
+	failErr error
+}
+
+func (f *failCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, error) {
+	f.mu.Lock()
+	if f.calls == nil {
+		f.calls = make(map[string]int)
+	}
+	f.calls[model]++
+	f.mu.Unlock()
+
+	if model == "summarizer" {
+		return summaryBody, nil
+	}
+	if model == "broken" {
+		return "", f.failErr
+	}
+	return reviewBody, nil
+}
+
+func TestRunPreservesSuccessfulFindingsOnPermanentFailure(t *testing.T) {
+	runner := NewRunner(Config{
+		Models:          []string{"good", "broken", "also-good"},
+		SummarizerModel: "summarizer",
+		Concurrency:     0,
+	})
+	runner.client = &failCompleter{failErr: errors.New("invalid model")}
+
+	run, err := runner.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	if len(run.Findings) != 2 {
+		t.Errorf("expected 2 preserved findings, got %d", len(run.Findings))
+	}
+	if len(run.Models) != 3 {
+		t.Errorf("expected 3 models in report, got %d", len(run.Models))
 	}
 }

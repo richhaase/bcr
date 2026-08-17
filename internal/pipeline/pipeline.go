@@ -20,6 +20,7 @@ type Config struct {
 	Extra           map[string]string
 	Temperature     float64
 	Concurrency     int
+	Retries         int
 }
 
 type modelCompleter interface {
@@ -33,6 +34,7 @@ type Runner struct {
 
 func NewRunner(cfg Config) *Runner {
 	client := provider.NewClient(cfg.BaseURL, cfg.APIKey)
+	client.MaxRetries = cfg.Retries
 	return &Runner{
 		client: client,
 		cfg:    cfg,
