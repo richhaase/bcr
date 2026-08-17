@@ -76,6 +76,38 @@ func PRInfo(ctx context.Context, owner, repo string, number int) (PR, error) {
 	}, nil
 }
 
+func PRHeadSHA(ctx context.Context, owner, repo string, number int) (string, error) {
+	cmd := exec.CommandContext(ctx, "gh", "pr", "view",
+		fmt.Sprintf("%d", number), "--repo", owner+"/"+repo,
+		"--json", "headRefOid", "--jq", ".headRefOid")
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errOut
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("gh pr view head: %s: %w", strings.TrimSpace(errOut.String()), err)
+	}
+
+	return strings.TrimSpace(out.String()), nil
+}
+
+func PROpen(ctx context.Context, owner, repo string, number int) (bool, error) {
+	cmd := exec.CommandContext(ctx, "gh", "pr", "view",
+		fmt.Sprintf("%d", number), "--repo", owner+"/"+repo,
+		"--json", "state", "--jq", ".state")
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errOut
+
+	if err := cmd.Run(); err != nil {
+		return false, fmt.Errorf("gh pr view state: %s: %w", strings.TrimSpace(errOut.String()), err)
+	}
+
+	return strings.TrimSpace(out.String()) == "OPEN", nil
+}
+
 func CIState(ctx context.Context, owner, repo string, number int) (string, int, error) {
 	cmd := exec.CommandContext(ctx, "gh", "pr", "checks",
 		fmt.Sprintf("%d", number), "--repo", owner+"/"+repo)
