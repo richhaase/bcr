@@ -27,7 +27,7 @@ type Config struct {
 }
 
 type modelCompleter interface {
-	Complete(ctx context.Context, model string, messages []provider.Message, temp float64) (string, error)
+	Complete(ctx context.Context, model string, messages []provider.Message, temp float64) (string, provider.Usage, error)
 }
 
 type Runner struct {
@@ -52,6 +52,7 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 	type reviewerResult struct {
 		model    string
 		findings []domain.Finding
+		usage    provider.Usage
 		err      error
 	}
 
@@ -90,7 +91,7 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 				Content: userContent,
 			})
 
-			resp, err := r.client.Complete(ctx, model, messages, r.cfg.Temperature)
+			resp, usage, err := r.client.Complete(ctx, model, messages, r.cfg.Temperature)
 			if err != nil {
 				resCh <- reviewerResult{model: model, err: err}
 				return
@@ -106,7 +107,7 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 				findings[i].Agent = model
 			}
 
-			resCh <- reviewerResult{model: model, findings: findings}
+			resCh <- reviewerResult{model: model, findings: findings, usage: usage}
 		}(m)
 	}
 
@@ -114,9 +115,13 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 	close(resCh)
 
 	var allFindings []domain.Finding
+	promptTokens := 0
+	completionTokens := 0
 	for res := range resCh {
 		if res.err == nil {
 			allFindings = append(allFindings, res.findings...)
+			promptTokens += res.usage.PromptTokens
+			completionTokens += res.usage.CompletionTokens
 		}
 	}
 
@@ -128,13 +133,7 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 	groups := domain.GroupFindings(allFindings)
 
 	if len(groups) == 0 {
-		return &domain.ReviewRun{
-			Diff:     r.cfg.Diff,
-			Findings: allFindings,
-			Final:    nil,
-			Excluded: excluded,
-			Models:   r.cfg.Models,
-		}, nil
+		return r.finish(allFindings, nil, excluded, 0, promptTokens, completionTokens), nil
 	}
 
 	groupsJSON, err := json.Marshal(groups)
@@ -164,7 +163,7 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 		{Role: "user", Content: sumContent},
 	}
 
-	sumResp, err := r.client.Complete(ctx, summarizerModel, sumMessages, 0.1)
+	sumResp, sumUsage, err := r.client.Complete(ctx, summarizerModel, sumMessages, 0.1)
 	if err != nil {
 		var fallbackFinal []domain.FinalFinding
 		for _, g := range groups {
@@ -182,15 +181,8 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 				Count:      g.Count,
 			})
 		}
-		return &domain.ReviewRun{
-			Diff:     r.cfg.Diff,
-			Findings: allFindings,
-			Final:    fallbackFinal,
-			Excluded: excluded,
-			Models:   r.cfg.Models,
-		}, nil
+		return r.finish(allFindings, fallbackFinal, excluded, len(fallbackFinal), promptTokens+sumUsage.PromptTokens, completionTokens+sumUsage.CompletionTokens), nil
 	}
-
 	finals, err := domain.ParseFinalFindings(sumResp)
 	if err != nil {
 		finals = make([]domain.FinalFinding, 0, len(groups))
@@ -218,12 +210,23 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 		}
 	}
 
+	return r.finish(allFindings, finals, excluded, dismissed, promptTokens+sumUsage.PromptTokens, completionTokens+sumUsage.CompletionTokens), nil
+}
+
+func (r *Runner) finish(findings []domain.Finding, finals []domain.FinalFinding, excluded, dismissed, promptTokens, completionTokens int) *domain.ReviewRun {
+	model := r.cfg.SummarizerModel
+	if model == "" && len(r.cfg.Models) > 0 {
+		model = r.cfg.Models[0]
+	}
 	return &domain.ReviewRun{
-		Diff:      r.cfg.Diff,
-		Findings:  allFindings,
-		Final:     finals,
-		Excluded:  excluded,
-		Dismissed: dismissed,
-		Models:    r.cfg.Models,
-	}, nil
+		Diff:             r.cfg.Diff,
+		Findings:         findings,
+		Final:            finals,
+		Excluded:         excluded,
+		Dismissed:        dismissed,
+		Models:           r.cfg.Models,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		EstimatedCostUSD: provider.EstimateUSD(model, promptTokens, completionTokens),
+	}
 }

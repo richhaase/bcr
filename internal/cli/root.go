@@ -39,6 +39,7 @@ func NewRootCmd(build BuildInfo) *cobra.Command {
 
 	root.AddCommand(
 		newReviewCmd(),
+		newDeskCmd(),
 		newWatchCmd(),
 		newConfigCmd(),
 		newVersionCmd(build),

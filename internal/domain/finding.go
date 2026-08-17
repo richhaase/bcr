@@ -49,10 +49,13 @@ type Group struct {
 }
 
 type ReviewRun struct {
-	Diff      string
-	Findings  []Finding
-	Final     []FinalFinding
-	Excluded  int
-	Dismissed int
-	Models    []string
+	Diff             string
+	Findings         []Finding
+	Final            []FinalFinding
+	Excluded         int
+	Dismissed        int
+	Models           []string
+	PromptTokens     int
+	CompletionTokens int
+	EstimatedCostUSD float64
 }

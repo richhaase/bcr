@@ -60,6 +60,13 @@ type ChatChoice struct {
 type ChatResponse struct {
 	Choices []ChatChoice `json:"choices"`
 	Error   *APIError    `json:"error,omitempty"`
+	Usage   Usage        `json:"usage"`
+}
+
+type Usage struct {
+	PromptTokens     int `json:"prompt_tokens,omitempty"`
+	CompletionTokens int `json:"completion_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
 }
 
 type APIError struct {
@@ -85,7 +92,7 @@ func NewClient(baseURL, apiKey string) *Client {
 	}
 }
 
-func (c *Client) Complete(ctx context.Context, model string, messages []Message, temp float64) (string, error) {
+func (c *Client) Complete(ctx context.Context, model string, messages []Message, temperature float64) (string, Usage, error) {
 	maxRetries := c.MaxRetries
 	if maxRetries < 0 {
 		maxRetries = 0
@@ -94,21 +101,22 @@ func (c *Client) Complete(ctx context.Context, model string, messages []Message,
 	var err error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		var out string
-		out, err = c.completeOnce(ctx, model, messages, temp)
+		var usage Usage
+		out, usage, err = c.completeOnce(ctx, model, messages, temperature)
 		if err == nil {
-			return out, nil
+			return out, usage, nil
 		}
 		if ctx.Err() != nil || attempt == maxRetries || !isRetryable(err) {
-			return "", err
+			return "", Usage{}, err
 		}
 		if err = c.wait(ctx, attempt+1); err != nil {
-			return "", err
+			return "", Usage{}, err
 		}
 	}
-	return "", err
+	return "", Usage{}, err
 }
 
-func (c *Client) completeOnce(ctx context.Context, model string, messages []Message, temp float64) (string, error) {
+func (c *Client) completeOnce(ctx context.Context, model string, messages []Message, temp float64) (string, Usage, error) {
 	reqBody := ChatRequest{
 		Model:       model,
 		Messages:    messages,
@@ -117,13 +125,13 @@ func (c *Client) completeOnce(ctx context.Context, model string, messages []Mess
 
 	payload, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		return "", Usage{}, err
 	}
 
 	endpoint := c.BaseURL + "/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return "", err
+		return "", Usage{}, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -135,33 +143,33 @@ func (c *Client) completeOnce(ctx context.Context, model string, messages []Mess
 
 	res, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", Usage{}, err
 	}
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return "", err
+		return "", Usage{}, err
 	}
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return "", &statusError{StatusCode: res.StatusCode, Body: string(body)}
+		return "", Usage{}, &statusError{StatusCode: res.StatusCode, Body: string(body)}
 	}
 
 	var chatRes ChatResponse
 	if err := json.Unmarshal(body, &chatRes); err != nil {
-		return "", fmt.Errorf("decode provider response: %w", err)
+		return "", Usage{}, fmt.Errorf("decode provider response: %w", err)
 	}
 
 	if chatRes.Error != nil && chatRes.Error.Message != "" {
-		return "", fmt.Errorf("provider api error: %s", chatRes.Error.Message)
+		return "", Usage{}, fmt.Errorf("provider api error: %s", chatRes.Error.Message)
 	}
 
 	if len(chatRes.Choices) == 0 {
-		return "", errEmptyChoices
+		return "", Usage{}, errEmptyChoices
 	}
 
-	return chatRes.Choices[0].Message.Content, nil
+	return chatRes.Choices[0].Message.Content, chatRes.Usage, nil
 }
 
 func (c *Client) wait(ctx context.Context, retry int) error {

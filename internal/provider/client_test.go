@@ -79,7 +79,7 @@ func TestCompleteRetriesTransient(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := newTestClient(tc.attempts, tc.status, "transient")
-			out, err := c.Complete(context.Background(), "m", nil, 0)
+			out, _, err := c.Complete(context.Background(), "m", nil, 0)
 			if err != nil {
 				t.Fatalf("Complete error: %v", err)
 			}
@@ -100,7 +100,7 @@ func TestCompletePermanentNotRetried(t *testing.T) {
 		calls++
 		return &http.Response{StatusCode: 400, Body: io.NopCloser(bytes.NewReader([]byte("invalid model"))), Header: http.Header{}}, nil
 	})
-	out, err := c.Complete(context.Background(), "m", nil, 0)
+	out, _, err := c.Complete(context.Background(), "m", nil, 0)
 	if err == nil {
 		t.Fatal("expected error for permanent status 400")
 	}
@@ -126,7 +126,7 @@ func TestCompleteExhaustsRetries(t *testing.T) {
 		calls++
 		return &http.Response{StatusCode: 500, Body: io.NopCloser(bytes.NewReader([]byte("boom"))), Header: http.Header{}}, nil
 	})
-	out, err := c.Complete(context.Background(), "m", nil, 0)
+	out, _, err := c.Complete(context.Background(), "m", nil, 0)
 	if err == nil {
 		t.Fatal("expected error after exhausting retries")
 	}
@@ -151,7 +151,7 @@ func TestCompleteRetriesEmptyOutput(t *testing.T) {
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))), Header: http.Header{}}, nil
 	})
-	out, err := c.Complete(context.Background(), "m", nil, 0)
+	out, _, err := c.Complete(context.Background(), "m", nil, 0)
 	if err != nil {
 		t.Fatalf("Complete error: %v", err)
 	}

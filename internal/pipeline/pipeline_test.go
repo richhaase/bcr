@@ -23,7 +23,7 @@ type fakeCompleter struct {
 	reviews   int
 }
 
-func (f *fakeCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, error) {
+func (f *fakeCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, provider.Usage, error) {
 	f.mu.Lock()
 	f.active++
 	if f.active > f.maxActive {
@@ -38,14 +38,14 @@ func (f *fakeCompleter) Complete(_ context.Context, model string, _ []provider.M
 	}()
 
 	if model == "summarizer" {
-		return summaryBody, nil
+		return summaryBody, provider.Usage{}, nil
 	}
 
 	f.mu.Lock()
 	f.reviews++
 	f.mu.Unlock()
 	time.Sleep(30 * time.Millisecond)
-	return reviewBody, nil
+	return reviewBody, provider.Usage{}, nil
 }
 
 func TestRunBoundedConcurrency(t *testing.T) {
@@ -113,7 +113,7 @@ type failCompleter struct {
 	failErr error
 }
 
-func (f *failCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, error) {
+func (f *failCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, provider.Usage, error) {
 	f.mu.Lock()
 	if f.calls == nil {
 		f.calls = make(map[string]int)
@@ -122,12 +122,12 @@ func (f *failCompleter) Complete(_ context.Context, model string, _ []provider.M
 	f.mu.Unlock()
 
 	if model == "summarizer" {
-		return summaryBody, nil
+		return summaryBody, provider.Usage{}, nil
 	}
 	if model == "broken" {
-		return "", f.failErr
+		return "", provider.Usage{}, f.failErr
 	}
-	return reviewBody, nil
+	return reviewBody, provider.Usage{}, nil
 }
 
 const summaryDismissedBody = `{"findings":[
@@ -140,14 +140,14 @@ type capturingCompleter struct {
 	summarizerMessage []provider.Message
 }
 
-func (c *capturingCompleter) Complete(_ context.Context, model string, messages []provider.Message, _ float64) (string, error) {
+func (c *capturingCompleter) Complete(_ context.Context, model string, messages []provider.Message, _ float64) (string, provider.Usage, error) {
 	if model == "summarizer" {
 		c.mu.Lock()
 		c.summarizerMessage = messages
 		c.mu.Unlock()
-		return summaryBody, nil
+		return summaryBody, provider.Usage{}, nil
 	}
-	return reviewBody, nil
+	return reviewBody, provider.Usage{}, nil
 }
 
 func TestPipelineInjectsFeedback(t *testing.T) {
@@ -210,11 +210,11 @@ func TestPipelineNoFeedbackWhenEmpty(t *testing.T) {
 
 type dismissCompleter struct{}
 
-func (dismissCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, error) {
+func (dismissCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, provider.Usage, error) {
 	if model == "summarizer" {
-		return summaryDismissedBody, nil
+		return summaryDismissedBody, provider.Usage{}, nil
 	}
-	return reviewBody, nil
+	return reviewBody, provider.Usage{}, nil
 }
 
 type reviewerCapturingCompleter struct {
@@ -222,9 +222,9 @@ type reviewerCapturingCompleter struct {
 	reviewerUserMsg string
 }
 
-func (c *reviewerCapturingCompleter) Complete(_ context.Context, model string, messages []provider.Message, _ float64) (string, error) {
+func (c *reviewerCapturingCompleter) Complete(_ context.Context, model string, messages []provider.Message, _ float64) (string, provider.Usage, error) {
 	if model == "summarizer" {
-		return summaryBody, nil
+		return summaryBody, provider.Usage{}, nil
 	}
 	var userMsg string
 	for _, m := range messages {
@@ -236,7 +236,7 @@ func (c *reviewerCapturingCompleter) Complete(_ context.Context, model string, m
 	c.mu.Lock()
 	c.reviewerUserMsg = userMsg
 	c.mu.Unlock()
-	return reviewBody, nil
+	return reviewBody, provider.Usage{}, nil
 }
 
 func TestPipelineInjectsGuidance(t *testing.T) {
@@ -318,11 +318,11 @@ const reviewBodyExcludeFile = `{"findings":[
 
 type excludeCompleter struct{}
 
-func (excludeCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, error) {
+func (excludeCompleter) Complete(_ context.Context, model string, _ []provider.Message, _ float64) (string, provider.Usage, error) {
 	if model == "summarizer" {
-		return summaryBody, nil
+		return summaryBody, provider.Usage{}, nil
 	}
-	return reviewBodyExcludeFile, nil
+	return reviewBodyExcludeFile, provider.Usage{}, nil
 }
 
 func TestRunAppliesExcludePatterns(t *testing.T) {

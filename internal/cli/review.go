@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/richhaase/bcr/internal/github"
 	"github.com/richhaase/bcr/internal/pipeline"
 	"github.com/richhaase/bcr/internal/review"
+	"github.com/richhaase/bcr/internal/store"
 	"github.com/richhaase/bcr/internal/terminal"
 )
 
@@ -131,6 +133,12 @@ func newReviewCmd() *cobra.Command {
 			}
 
 			renderReport(cmd.OutOrStdout(), run)
+
+			if prNum > 0 {
+				if err := persistRun(ctx, run, prNum); err != nil {
+					slog.Debug("could not persist review record", "err", err)
+				}
+			}
 
 			if prNum > 0 {
 				if err := postReviewCmd(cmd, run, prNum, yesFlag); err != nil {
@@ -271,6 +279,28 @@ func splitOwnerRepo(in string) (string, string) {
 	return parts[0], strings.Join(parts[1:], "/")
 }
 
+func persistRun(ctx context.Context, run *domain.ReviewRun, prNum int) error {
+	repoStr, err := github.RepoName(ctx)
+	if err != nil {
+		return err
+	}
+	owner, repo := splitOwnerRepo(repoStr)
+	prRef := fmt.Sprintf("%s/%s#%d", owner, repo, prNum)
+
+	record := store.ReviewRecordV1{
+		SchemaVersion:    store.CurrentSchemaVersion,
+		PRRef:            prRef,
+		Timestamp:        time.Now(),
+		Models:           run.Models,
+		Findings:         run.Findings,
+		Final:            run.Final,
+		PromptTokens:     run.PromptTokens,
+		CompletionTokens: run.CompletionTokens,
+		EstimatedCostUSD: run.EstimatedCostUSD,
+	}
+	return store.NewStore().SaveRun(prRef, record)
+}
+
 func renderReport(out io.Writer, run *domain.ReviewRun) {
 	useColor := terminal.IsStdoutTTY()
 
@@ -280,6 +310,8 @@ func renderReport(out io.Writer, run *domain.ReviewRun) {
 			kept = append(kept, f)
 		}
 	}
+
+	tokenLine := fmt.Sprintf("Tokens: %d prompt + %d completion | Est Cost: $%.6f", run.PromptTokens, run.CompletionTokens, run.EstimatedCostUSD)
 
 	if len(kept) == 0 {
 		if useColor {
@@ -293,6 +325,7 @@ func renderReport(out io.Writer, run *domain.ReviewRun) {
 		if run.Excluded > 0 {
 			fmt.Fprintf(out, "(%d finding(s) excluded by regex patterns)\n", run.Excluded)
 		}
+		fmt.Fprintln(out, tokenLine)
 		return
 	}
 
@@ -333,4 +366,5 @@ func renderReport(out io.Writer, run *domain.ReviewRun) {
 	if run.Excluded > 0 || run.Dismissed > 0 {
 		fmt.Fprintln(out)
 	}
+	fmt.Fprintln(out, tokenLine)
 }
