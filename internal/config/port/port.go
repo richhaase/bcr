@@ -29,11 +29,31 @@ type acrFPFilter struct {
 	Threshold *float64 `yaml:"threshold"`
 }
 
+type acrPRFeedback struct {
+	Enabled *bool
+}
+
+func (f *acrPRFeedback) UnmarshalYAML(value *yaml.Node) error {
+	var b bool
+	if err := value.Decode(&b); err == nil {
+		f.Enabled = &b
+		return nil
+	}
+	var m struct {
+		Enabled *bool `yaml:"enabled"`
+	}
+	if err := value.Decode(&m); err == nil {
+		f.Enabled = m.Enabled
+		return nil
+	}
+	return nil
+}
+
 type acrConfig struct {
 	Concurrency       *int           `yaml:"concurrency"`
 	Base              *string        `yaml:"base"`
 	Retries           *int           `yaml:"retries"`
-	PRFeedback        *bool          `yaml:"pr_feedback"`
+	PRFeedback        *acrPRFeedback `yaml:"pr_feedback"`
 	Filters           *acrFilters    `yaml:"filters"`
 	GuidanceFile      *string        `yaml:"guidance_file"`
 	SummarizerModel   *string        `yaml:"summarizer_model"`
@@ -41,10 +61,10 @@ type acrConfig struct {
 	ReviewerAgent     *string        `yaml:"reviewer_agent"`
 	SummarizerAgent   *string        `yaml:"summarizer_agent"`
 	Reviewers         *int           `yaml:"reviewers"`
-	Timeout           *int           `yaml:"timeout"`
-	Fetch             *int           `yaml:"fetch"`
-	SummarizerTimeout *int           `yaml:"summarizer_timeout"`
-	FPFilterTimeout   *int           `yaml:"fp_filter_timeout"`
+	Timeout           any            `yaml:"timeout"`
+	Fetch             any            `yaml:"fetch"`
+	SummarizerTimeout any            `yaml:"summarizer_timeout"`
+	FPFilterTimeout   any            `yaml:"fp_filter_timeout"`
 	FPFilter          *acrFPFilter   `yaml:"fp_filter"`
 	ReviewerModel     *string        `yaml:"reviewer_model"`
 	Watch             map[string]any `yaml:"watch"`
@@ -97,8 +117,8 @@ func Port(path string) (*PortResult, error) {
 	if acr.Retries != nil && *acr.Retries > 0 {
 		res.Config.Retries = *acr.Retries
 	}
-	if acr.PRFeedback != nil {
-		res.Config.PRFeedback = *acr.PRFeedback
+	if acr.PRFeedback != nil && acr.PRFeedback.Enabled != nil {
+		res.Config.PRFeedback = *acr.PRFeedback.Enabled
 	}
 	if acr.Filters != nil && acr.Filters.ExcludePatterns != nil {
 		res.Config.Exclude = *acr.Filters.ExcludePatterns
