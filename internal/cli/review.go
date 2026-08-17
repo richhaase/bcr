@@ -20,7 +20,6 @@ func newReviewCmd() *cobra.Command {
 		prNum           int
 		modelsFlag      string
 		summarizerModel string
-		baseURLFlag     string
 	)
 
 	cmd := &cobra.Command{
@@ -50,9 +49,6 @@ func newReviewCmd() *cobra.Command {
 			}
 			if summarizerModel != "" {
 				cfg.SummarizerModel = summarizerModel
-			}
-			if baseURLFlag != "" {
-				cfg.BaseURL = baseURLFlag
 			}
 
 			var diffContent string
@@ -92,9 +88,8 @@ func newReviewCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&baseRef, "base", "b", "", "git base ref (default from config or main)")
 	cmd.Flags().IntVarP(&prNum, "pr", "p", 0, "GitHub PR number to review via gh diff")
-	cmd.Flags().StringVarP(&modelsFlag, "models", "m", "", "comma-separated list of reviewer models")
+	cmd.Flags().StringVarP(&modelsFlag, "reviewers", "r", "", "comma-separated list of reviewer models")
 	cmd.Flags().StringVarP(&summarizerModel, "summarizer", "s", "", "summarizer model")
-	cmd.Flags().StringVarP(&baseURLFlag, "base-url", "u", "", "API base URL override")
 
 	return cmd
 }
