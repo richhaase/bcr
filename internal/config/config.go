@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -16,6 +17,7 @@ type Config struct {
 	Extra           map[string]string `yaml:"extra"`
 	Base            string            `yaml:"base"`
 	Temperature     float64           `yaml:"temperature"`
+	Concurrency     int               `yaml:"concurrency"`
 }
 
 func DefaultConfig() *Config {
@@ -29,6 +31,7 @@ func DefaultConfig() *Config {
 		Extra:           make(map[string]string),
 		Base:            "main",
 		Temperature:     0.2,
+		Concurrency:     0,
 	}
 }
 
@@ -66,6 +69,12 @@ func Load() (*Config, error) {
 
 	if val := os.Getenv("BCR_BASE"); val != "" {
 		cfg.Base = val
+	}
+
+	if val := os.Getenv("BCR_CONCURRENCY"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil {
+			cfg.Concurrency = n
+		}
 	}
 
 	return cfg, nil
@@ -107,6 +116,8 @@ summarizer_model: "anthropic/claude-3.7-sonnet"
 base: "main"
 
 temperature: 0.2
+
+concurrency: 0
 `
 
 func configDir() string {

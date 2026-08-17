@@ -19,10 +19,15 @@ type Config struct {
 	Diff            string
 	Extra           map[string]string
 	Temperature     float64
+	Concurrency     int
+}
+
+type modelCompleter interface {
+	Complete(ctx context.Context, model string, messages []provider.Message, temp float64) (string, error)
 }
 
 type Runner struct {
-	client *provider.Client
+	client modelCompleter
 	cfg    Config
 }
 
@@ -45,6 +50,12 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 		err      error
 	}
 
+	limit := len(r.cfg.Models)
+	if r.cfg.Concurrency > 0 && r.cfg.Concurrency < len(r.cfg.Models) {
+		limit = r.cfg.Concurrency
+	}
+	sem := make(chan struct{}, limit)
+
 	resCh := make(chan reviewerResult, len(r.cfg.Models))
 	var wg sync.WaitGroup
 
@@ -52,6 +63,8 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 		wg.Add(1)
 		go func(model string) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			messages := []provider.Message{
 				{Role: "system", Content: prompt.ReviewSystemPrompt},
 			}

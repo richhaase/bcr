@@ -25,6 +25,7 @@ func newReviewCmd() *cobra.Command {
 		prNum           int
 		modelsFlag      string
 		summarizerModel string
+		concurrencyFlag int
 		yesFlag         bool
 	)
 
@@ -56,6 +57,9 @@ func newReviewCmd() *cobra.Command {
 			if summarizerModel != "" {
 				cfg.SummarizerModel = summarizerModel
 			}
+			if concurrencyFlag > 0 {
+				cfg.Concurrency = concurrencyFlag
+			}
 
 			var diffContent string
 			if prNum > 0 {
@@ -80,6 +84,7 @@ func newReviewCmd() *cobra.Command {
 				Diff:            diffContent,
 				Extra:           cfg.Extra,
 				Temperature:     cfg.Temperature,
+				Concurrency:     cfg.Concurrency,
 			})
 
 			run, err := runner.Run(ctx)
@@ -103,6 +108,7 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&prNum, "pr", "p", 0, "GitHub PR number to review via gh diff")
 	cmd.Flags().StringVarP(&modelsFlag, "reviewers", "r", "", "comma-separated list of reviewer models")
 	cmd.Flags().StringVarP(&summarizerModel, "summarizer", "s", "", "summarizer model")
+	cmd.Flags().IntVarP(&concurrencyFlag, "concurrency", "c", 0, "maximum number of reviewer models to run in parallel (0 = unbounded)")
 	cmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "submit PR review non-interactively without prompting")
 
 	return cmd

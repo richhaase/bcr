@@ -77,6 +77,7 @@ func newConfigShowCmd() *cobra.Command {
 			fmt.Fprintf(out, "summarizer_model: %s\n", cfg.SummarizerModel)
 			fmt.Fprintf(out, "base: %s\n", cfg.Base)
 			fmt.Fprintf(out, "temperature: %g\n", cfg.Temperature)
+			fmt.Fprintf(out, "concurrency: %d\n", cfg.Concurrency)
 			return nil
 		},
 	}

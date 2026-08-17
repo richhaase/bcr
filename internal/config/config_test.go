@@ -32,6 +32,40 @@ func TestEnvOverride(t *testing.T) {
 	}
 }
 
+func TestConcurrencyDefaultZero(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Concurrency != 0 {
+		t.Errorf("expected default concurrency 0, got %d", cfg.Concurrency)
+	}
+}
+
+func TestConcurrencyEnvOverride(t *testing.T) {
+	t.Setenv("BCR_CONCURRENCY", "3")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Concurrency != 3 {
+		t.Errorf("expected concurrency 3, got %d", cfg.Concurrency)
+	}
+}
+
+func TestConcurrencyIgnoredWhenEmpty(t *testing.T) {
+	t.Setenv("BCR_CONCURRENCY", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Concurrency != 0 {
+		t.Errorf("expected concurrency 0, got %d", cfg.Concurrency)
+	}
+}
+
 func TestProviderKeyDerivation(t *testing.T) {
 	t.Setenv("OPENROUTER_API_KEY", "or-key")
 	t.Setenv("OPENAI_API_KEY", "oa-key")
