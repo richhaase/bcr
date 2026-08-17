@@ -1,6 +1,9 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -153,6 +156,92 @@ func TestConfigExcludeDefaultEmpty(t *testing.T) {
 	}
 	if len(cfg.Exclude) != 0 {
 		t.Errorf("expected empty exclude list by default, got %v", cfg.Exclude)
+	}
+}
+
+func TestConfigGuidanceFields(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, ".bcr.yaml")
+	err := os.WriteFile(configPath, []byte("guidance: follow the project style guide\nguidance_file: ./docs/review.md\n"), 0o600)
+	if err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Chdir(dir)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Guidance != "follow the project style guide" {
+		t.Errorf("expected guidance parsed from YAML, got %q", cfg.Guidance)
+	}
+	if cfg.GuidanceFile != "./docs/review.md" {
+		t.Errorf("expected guidance_file parsed from YAML, got %q", cfg.GuidanceFile)
+	}
+}
+
+func TestGuidanceEnvOverride(t *testing.T) {
+	t.Setenv("BCR_GUIDANCE", "env guidance")
+	t.Setenv("BCR_GUIDANCE_FILE", "/tmp/env-guide.md")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Guidance != "env guidance" {
+		t.Errorf("expected env guidance, got %q", cfg.Guidance)
+	}
+	if cfg.GuidanceFile != "/tmp/env-guide.md" {
+		t.Errorf("expected env guidance_file, got %q", cfg.GuidanceFile)
+	}
+}
+
+func TestResolveGuidanceEmptyWhenUnset(t *testing.T) {
+	cfg := &Config{}
+	got, err := cfg.ResolveGuidance()
+	if err != nil {
+		t.Fatalf("ResolveGuidance error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("expected empty guidance, got %q", got)
+	}
+}
+
+func TestResolveGuidanceInlineAndFile(t *testing.T) {
+	dir := t.TempDir()
+	guide := filepath.Join(dir, "guide.md")
+	if err := os.WriteFile(guide, []byte("# Review Guide\n\nPrefer explicit error handling.\n"), 0o600); err != nil {
+		t.Fatalf("write guide: %v", err)
+	}
+
+	cfg := &Config{
+		Guidance:     "Focus on correctness.",
+		GuidanceFile: guide,
+	}
+	got, err := cfg.ResolveGuidance()
+	if err != nil {
+		t.Fatalf("ResolveGuidance error: %v", err)
+	}
+
+	if !strings.Contains(got, "# Review Guide") {
+		t.Errorf("expected file content in resolved guidance, got %q", got)
+	}
+	if !strings.Contains(got, "Focus on correctness.") {
+		t.Errorf("expected inline guidance in resolved guidance, got %q", got)
+	}
+	if !strings.Contains(got, "\n") {
+		t.Errorf("expected file and inline guidance combined on separate lines, got %q", got)
+	}
+}
+
+func TestResolveGuidanceMissingFileFails(t *testing.T) {
+	cfg := &Config{GuidanceFile: filepath.Join(t.TempDir(), "does-not-exist.md")}
+	_, err := cfg.ResolveGuidance()
+	if err == nil {
+		t.Fatal("expected error for missing guidance file")
+	}
+	if !strings.Contains(err.Error(), "guidance file") {
+		t.Errorf("expected descriptive error mentioning guidance file, got %q", err)
 	}
 }
 

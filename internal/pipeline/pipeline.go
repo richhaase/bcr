@@ -23,6 +23,7 @@ type Config struct {
 	Retries         int
 	Feedback        string
 	ExcludePatterns []string
+	Guidance        string
 }
 
 type modelCompleter interface {
@@ -80,9 +81,13 @@ func (r *Runner) Run(ctx context.Context) (*domain.ReviewRun, error) {
 				})
 			}
 
+			userContent := fmt.Sprintf("Here is the git diff to review:\n\n```diff\n%s\n```", r.cfg.Diff)
+			if r.cfg.Guidance != "" {
+				userContent += fmt.Sprintf("\n\nReview Guidance:\n\"\"\"\n%s\n\"\"\"", r.cfg.Guidance)
+			}
 			messages = append(messages, provider.Message{
 				Role:    "user",
-				Content: fmt.Sprintf("Here is the git diff to review:\n\n```diff\n%s\n```", r.cfg.Diff),
+				Content: userContent,
 			})
 
 			resp, err := r.client.Complete(ctx, model, messages, r.cfg.Temperature)

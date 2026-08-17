@@ -217,6 +217,74 @@ func (dismissCompleter) Complete(_ context.Context, model string, _ []provider.M
 	return reviewBody, nil
 }
 
+type reviewerCapturingCompleter struct {
+	mu              sync.Mutex
+	reviewerUserMsg string
+}
+
+func (c *reviewerCapturingCompleter) Complete(_ context.Context, model string, messages []provider.Message, _ float64) (string, error) {
+	if model == "summarizer" {
+		return summaryBody, nil
+	}
+	var userMsg string
+	for _, m := range messages {
+		if m.Role == "user" {
+			userMsg = m.Content
+			break
+		}
+	}
+	c.mu.Lock()
+	c.reviewerUserMsg = userMsg
+	c.mu.Unlock()
+	return reviewBody, nil
+}
+
+func TestPipelineInjectsGuidance(t *testing.T) {
+	var f reviewerCapturingCompleter
+	runner := NewRunner(Config{
+		Models:          []string{"m1"},
+		SummarizerModel: "summarizer",
+		Guidance:        "Prefer explicit error extraction using errors.As.",
+	})
+	runner.client = &f
+
+	if _, err := runner.Run(context.Background()); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	f.mu.Lock()
+	userMsg := f.reviewerUserMsg
+	f.mu.Unlock()
+
+	if !strings.Contains(userMsg, "Review Guidance:") {
+		t.Errorf("expected guidance section in reviewer user message, got %q", userMsg)
+	}
+	if !strings.Contains(userMsg, "Prefer explicit error extraction using errors.As.") {
+		t.Errorf("expected guidance body in reviewer user message, got %q", userMsg)
+	}
+}
+
+func TestPipelineNoGuidanceLeavesUserMessageIntact(t *testing.T) {
+	var f reviewerCapturingCompleter
+	runner := NewRunner(Config{
+		Models:          []string{"m1"},
+		SummarizerModel: "summarizer",
+	})
+	runner.client = &f
+
+	if _, err := runner.Run(context.Background()); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	f.mu.Lock()
+	userMsg := f.reviewerUserMsg
+	f.mu.Unlock()
+
+	if strings.Contains(userMsg, "Review Guidance:") {
+		t.Errorf("did not expect guidance section without guidance config, got %q", userMsg)
+	}
+}
+
 func TestSynthesizerDropsDismissedFinding(t *testing.T) {
 	runner := NewRunner(Config{
 		Models:          []string{"m1"},

@@ -30,6 +30,8 @@ func newReviewCmd() *cobra.Command {
 		yesFlag         bool
 		noPRFeedback    bool
 		excludeFlag     []string
+		guidanceFlag    string
+		guidanceFile    string
 	)
 
 	cmd := &cobra.Command{
@@ -67,6 +69,17 @@ func newReviewCmd() *cobra.Command {
 				cfg.Retries = retriesFlag
 			}
 			cfg.Exclude = append(cfg.Exclude, excludeFlag...)
+			if guidanceFlag != "" {
+				cfg.Guidance = guidanceFlag
+			}
+			if guidanceFile != "" {
+				cfg.GuidanceFile = guidanceFile
+			}
+
+			guidance, err := cfg.ResolveGuidance()
+			if err != nil {
+				return err
+			}
 
 			var diffContent string
 			if prNum > 0 {
@@ -109,6 +122,7 @@ func newReviewCmd() *cobra.Command {
 				Retries:         cfg.Retries,
 				Feedback:        feedback,
 				ExcludePatterns: cfg.Exclude,
+				Guidance:        guidance,
 			})
 
 			run, err := runner.Run(ctx)
@@ -137,6 +151,8 @@ func newReviewCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "submit PR review non-interactively without prompting")
 	cmd.Flags().BoolVar(&noPRFeedback, "no-pr-feedback", false, "disable fetching PR discussion context for the synthesizer")
 	cmd.Flags().StringArrayVar(&excludeFlag, "exclude", nil, "exclude findings whose file, rule, or message matches a regex; repeatable")
+	cmd.Flags().StringVar(&guidanceFlag, "guidance", "", "inline review guidance appended to each reviewer's context")
+	cmd.Flags().StringVar(&guidanceFile, "guidance-file", "", "path to a markdown file with review guidance")
 
 	return cmd
 }

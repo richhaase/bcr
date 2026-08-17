@@ -80,6 +80,12 @@ func newConfigShowCmd() *cobra.Command {
 			fmt.Fprintf(out, "concurrency: %d\n", cfg.Concurrency)
 			fmt.Fprintf(out, "retries: %d\n", cfg.Retries)
 			fmt.Fprintf(out, "exclude: %s\n", strings.Join(cfg.Exclude, ", "))
+			if cfg.Guidance != "" {
+				fmt.Fprintf(out, "guidance: %s\n", cfg.Guidance)
+			}
+			if cfg.GuidanceFile != "" {
+				fmt.Fprintf(out, "guidance_file: %s\n", cfg.GuidanceFile)
+			}
 			return nil
 		},
 	}

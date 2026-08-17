@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,6 +22,8 @@ type Config struct {
 	Retries         int               `yaml:"retries"`
 	PRFeedback      bool              `yaml:"pr_feedback"`
 	Exclude         []string          `yaml:"exclude"`
+	Guidance        string            `yaml:"guidance"`
+	GuidanceFile    string            `yaml:"guidance_file"`
 }
 
 func DefaultConfig() *Config {
@@ -104,7 +107,38 @@ func Load() (*Config, error) {
 		cfg.Exclude = append(cfg.Exclude, list...)
 	}
 
+	if val := os.Getenv("BCR_GUIDANCE"); val != "" {
+		cfg.Guidance = val
+	}
+
+	if val := os.Getenv("BCR_GUIDANCE_FILE"); val != "" {
+		cfg.GuidanceFile = val
+	}
+
 	return cfg, nil
+}
+
+func (c *Config) ResolveGuidance() (string, error) {
+	var parts []string
+
+	if c.GuidanceFile != "" {
+		data, err := os.ReadFile(c.GuidanceFile)
+		if err != nil {
+			return "", fmt.Errorf("read guidance file %q: %w", c.GuidanceFile, err)
+		}
+		parts = append(parts, strings.TrimSpace(string(data)))
+	}
+
+	if c.Guidance != "" {
+		parts = append(parts, strings.TrimSpace(c.Guidance))
+	}
+
+	resolved := ""
+	if len(parts) > 0 {
+		resolved = strings.Join(parts, "\n")
+	}
+
+	return strings.TrimSpace(resolved), nil
 }
 
 func findConfigFile() string {
